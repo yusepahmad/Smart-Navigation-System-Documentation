@@ -1,0 +1,10 @@
+from,to
+A,B
+A,G
+B,C
+B,E
+C,D
+D,F
+E,F
+G,E
+F,A
