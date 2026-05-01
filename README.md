@@ -15,8 +15,8 @@ Sistem navigasi berbasis **weighted graph** dengan tiga antarmuka:
 
 ```bash
 # 1. Clone repo
-git clone <repo-url>
-cd project-akhir
+git clone https://github.com/yusepahmad/Smart-Navigation-System-Documentation.git
+cd Smart-Navigation-System-Documentation
 
 # 2. Install dependencies
 ./run.sh setup
@@ -55,7 +55,7 @@ cd project-akhir
 ## Struktur Project
 
 ```text
-project-akhir/
+Smart-Navigation-System-Documentation/
 ├── run.sh                   # Unified runner — semua command dari sini
 ├── pyproject.toml           # Dependensi Python (uv)
 ├── README.md
