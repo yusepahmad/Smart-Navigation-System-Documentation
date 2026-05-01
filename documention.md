@@ -1,409 +1,569 @@
-# 📘 Smart Navigation System Documentation (Python Version)
+# Smart Navigation System — Dokumentasi Teknis
 
-**Explorer + Shortest Path + History – Python Implementation**
-
----
-
-## 1. 📌 Overview
-
-Smart Navigation System adalah sistem simulasi navigasi berbasis **graph** yang menyediakan:
-
-* 🔍 Pencarian jalur tercepat (**BFS**)
-* 🌐 Eksplorasi seluruh node (**DFS**)
-* 🧾 Penyimpanan riwayat perjalanan (**Stack / History**)
-* 📂 Dukungan input/output berbasis **CSV**
+**Weighted Graph + Dijkstra + DFS + History**
+Tersedia dalam dua bahasa: Python (CLI & Streamlit) dan C++ (CLI)
 
 ---
 
-## 2. 🧠 Arsitektur Sistem
+## 1. Overview
+
+Smart Navigation System adalah sistem simulasi navigasi berbasis **weighted graph** yang menyediakan:
+
+- Pencarian jalur optimal berdasarkan jarak atau waktu tempuh (**Dijkstra**)
+- Eksplorasi seluruh node (**DFS iteratif**)
+- Penyimpanan riwayat perjalanan (**Stack / History**)
+- Input/output berbasis **CSV**
+- Antarmuka **CLI** (Python & C++) dan **Streamlit UI** (Python)
+
+---
+
+## 2. Arsitektur Sistem
 
 ### 2.1 Representasi Graph
 
-Graph direpresentasikan menggunakan:
-
-* **Adjacency List (dictionary)**
-* Node berupa string (`A, B, C, ...`)
-
-Contoh:
+Graph direpresentasikan menggunakan **Adjacency List berbobot** (undirected / bidirectional).
+Setiap edge menyimpan dua bobot: `distance` (km) dan `time` (menit).
 
 ```
-A -- B -- C
-|    |
-D -- E
+Jakarta Kota --[d:1.5, t:3]--> Jayakarta --[d:1.0, t:2]--> Mangga Besar
+                                    |
+                              (bidirectional)
 ```
-
----
 
 ### 2.2 Struktur Data
 
-#### Graph
-
-```python
-class Graph:
-    def __init__(self):
-        self.adj = {}
-```
-
-#### Queue (BFS)
-
-```python
-from collections import deque
-queue = deque()
-```
-
-#### Stack (DFS & History)
-
-```python
-stack = []
-```
+| Struktur | Digunakan Untuk | Python | C++ |
+|----------|----------------|--------|-----|
+| Adjacency List | Representasi graph | `dict[str, dict[str, dict]]` | `std::map<string, map<string, EdgeData>>` |
+| Min-Heap (Priority Queue) | Dijkstra | `heapq` | `std::priority_queue` (min) |
+| Stack | DFS & History | `list` | `std::vector` |
+| Parent Map | Rekonstruksi path | `dict` | `std::unordered_map` |
 
 ---
 
-## 3. ⚙️ Fitur Sistem
+## 3. Fitur Sistem
 
-| No | Fitur           | Deskripsi                       |
-| -- | --------------- | ------------------------------- |
-| 1  | Tambah Node     | Menambahkan lokasi              |
-| 2  | Tambah Edge     | Menambahkan koneksi antar node  |
-| 3  | Tampilkan Graph | Melihat adjacency list          |
-| 4  | BFS             | Mencari jalur tercepat          |
-| 5  | DFS             | Eksplorasi graph                |
-| 6  | History         | Riwayat path yang pernah dicari |
-| 7  | CSV Support     | Load & save data                |
-
----
-
-## 4. 🔄 Algoritma
+| No | Fitur | Deskripsi |
+|----|-------|-----------|
+| 1 | Tambah Node | Menambahkan lokasi ke graph |
+| 2 | Tambah Edge | Koneksi bidirectional dengan distance & time |
+| 3 | Tampilkan Graph | Adjacency list terurut dengan bobot |
+| 4 | Find Optimal Path | Dijkstra, pilih optimasi by distance atau time |
+| 5 | DFS Exploration | Eksplorasi semua node dari titik awal |
+| 6 | History | Riwayat semua path yang pernah ditemukan |
+| 7 | Load CSV | Muat graph dari file nodes.csv + edges.csv |
+| 8 | Batch Query | Proses banyak pasang (start, end) sekaligus |
+| 9 | Export | Simpan result.csv dan history.csv |
 
 ---
 
-### 4.1 BFS (Shortest Path)
+## 4. Algoritma
 
-Digunakan untuk mencari jalur tercepat berdasarkan jumlah edge.
+### 4.1 Dijkstra (Find Optimal Path)
 
-#### Flow:
+Mencari jalur dengan **total bobot minimum** dari node asal ke tujuan.
+Bobot yang dioptimasi dipilih oleh user: `distance` atau `time`.
 
-1. Masukkan start node ke queue
-2. Tandai visited
-3. Simpan parent
-4. Stop saat tujuan ditemukan
-5. Rekonstruksi path
+#### Flow
 
-#### Implementasi:
+1. Masukkan `(0, start)` ke priority queue (min-heap)
+2. Inisialisasi `min_weights[start] = 0`, semua lain = ∞
+3. Simpan `parent[start] = None`
+4. Loop — pop item dengan bobot terkecil:
+   - Jika node == tujuan → stop
+   - Skip jika bobot yang di-pop lebih besar dari `min_weights[node]` (stale entry)
+   - Untuk setiap tetangga: hitung `new_weight = current + edge_weight`
+   - Jika `new_weight < min_weights[neighbor]` → update dan push ke heap
+5. Rekonstruksi path dari tujuan ke awal via `parent`, lalu reverse
+
+#### Kompleksitas
+
+| | Nilai |
+|--|--|
+| Waktu | O((V + E) log V) |
+| Ruang | O(V) |
+
+#### Implementasi Python
 
 ```python
-from collections import deque
+import heapq
 
-def bfs_shortest_path(graph, start, end):
-    visited = set()
-    queue = deque()
-    parent = {}
+def find_optimal_path(graph, start, end, optimize_by="distance"):
+    pq = [(0.0, start)]
+    min_weights = {start: 0.0}
+    parent = {start: None}   # start: None = sentinel
 
-    queue.append(start)
-    visited.add(start)
-    parent[start] = None
-
-    while queue:
-        current = queue.popleft()
+    while pq:
+        current_weight, current = heapq.heappop(pq)
 
         if current == end:
             break
+        if current_weight > min_weights.get(current, float('inf')):
+            continue
 
-        for neighbor in graph.adj[current]:
-            if neighbor not in visited:
-                visited.add(neighbor)
-                parent[neighbor] = current
-                queue.append(neighbor)
+        for neighbor in graph.neighbors(current):
+            edge_data = graph.get_edge_data(current, neighbor)
+            edge_weight = edge_data.get(optimize_by, 1.0)
+            new_weight = current_weight + edge_weight
 
-    path = []
+            if new_weight < min_weights.get(neighbor, float('inf')):
+                min_weights[neighbor] = new_weight
+                parent[neighbor] = (current,
+                                    edge_data['distance'],
+                                    edge_data['time'])
+                heapq.heappush(pq, (new_weight, neighbor))
+
+    if end not in parent:
+        return [], 0.0, 0.0
+
+    # Rekonstruksi path
+    path, total_dist, total_time = [], 0.0, 0.0
     cur = end
     while cur is not None:
         path.append(cur)
-        cur = parent.get(cur)
+        info = parent[cur]
+        if info is not None:
+            p_node, d, t = info
+            total_dist += d
+            total_time += t
+            cur = p_node
+        else:
+            cur = None
 
     path.reverse()
+    return path, round(total_dist, 1), round(total_time, 1)
+```
 
-    return path if path and path[0] == start else []
+#### Implementasi C++
+
+```cpp
+std::tuple<std::vector<std::string>, double, double>
+find_optimal_path(const Graph& graph, const std::string& start,
+                  const std::string& end,
+                  const std::string& optimize_by = "distance") const
+{
+    using Item = std::pair<double, std::string>;
+    std::priority_queue<Item, std::vector<Item>, std::greater<Item>> pq;
+
+    std::unordered_map<std::string, double> min_w;
+    struct ParentInfo { std::string node; double dist; double time; };
+    std::unordered_map<std::string, ParentInfo> parent;
+
+    min_w[start] = 0.0;
+    parent[start] = {"", 0.0, 0.0};   // sentinel
+    pq.push({0.0, start});
+
+    while (!pq.empty()) {
+        auto [w, cur] = pq.top(); pq.pop();
+        if (cur == end) break;
+        if (w > min_w[cur]) continue;
+
+        for (const auto& nbr : graph.neighbors(cur)) {
+            const EdgeData& ed = graph.get_edge_data(cur, nbr);
+            double ew = (optimize_by == "time") ? ed.time_val : ed.distance;
+            double nw = w + ew;
+            if (!min_w.count(nbr) || nw < min_w[nbr]) {
+                min_w[nbr] = nw;
+                parent[nbr] = {cur, ed.distance, ed.time_val};
+                pq.push({nw, nbr});
+            }
+        }
+    }
+
+    if (!parent.count(end)) return {{}, 0.0, 0.0};
+
+    std::vector<std::string> path;
+    double total_dist = 0.0, total_time = 0.0;
+    std::string cur = end;
+    while (true) {
+        path.push_back(cur);
+        const ParentInfo& pi = parent.at(cur);
+        if (pi.node.empty()) break;
+        total_dist += pi.dist;
+        total_time += pi.time;
+        cur = pi.node;
+    }
+    std::reverse(path.begin(), path.end());
+    return {path, round1(total_dist), round1(total_time)};
+}
 ```
 
 ---
 
 ### 4.2 DFS (Exploration)
 
-Digunakan untuk eksplorasi seluruh graph.
+Eksplorasi iteratif dari node awal menggunakan stack eksplisit.
+Tetangga di-push dalam urutan terbalik agar urutan kunjungan konsisten (kiri ke kanan).
 
-#### Flow:
+#### Flow
 
-1. Push node ke stack
-2. Pop node
-3. Tandai visited
-4. Push neighbors
+1. Push `start` ke stack
+2. Pop node → skip jika sudah visited
+3. Tandai visited, tambahkan ke result
+4. Push semua tetangga yang belum visited (dalam urutan terbalik)
+5. Ulangi sampai stack kosong
 
-#### Implementasi:
+#### Implementasi Python
 
 ```python
-def dfs(graph, start):
+def dfs_exploration(graph, start):
+    if not graph.has_node(start):
+        return []
+
     visited = set()
     stack = [start]
     result = []
 
     while stack:
         node = stack.pop()
+        if node in visited:
+            continue
+        visited.add(node)
+        result.append(node)
 
-        if node not in visited:
-            visited.add(node)
-            result.append(node)
-
-            for neighbor in reversed(graph.adj[node]):
-                if neighbor not in visited:
-                    stack.append(neighbor)
+        for neighbor in reversed(graph.neighbors(node)):
+            if neighbor not in visited:
+                stack.append(neighbor)
 
     return result
+```
+
+#### Implementasi C++
+
+```cpp
+std::vector<std::string> dfs_exploration(const Graph& graph,
+                                          const std::string& start) const
+{
+    if (!graph.has_node(start)) return {};
+
+    std::unordered_set<std::string> visited;
+    std::vector<std::string> stack, result;
+    stack.push_back(start);
+
+    while (!stack.empty()) {
+        std::string node = stack.back(); stack.pop_back();
+        if (visited.count(node)) continue;
+        visited.insert(node);
+        result.push_back(node);
+
+        auto nbrs = graph.neighbors(node);
+        for (auto it = nbrs.rbegin(); it != nbrs.rend(); ++it)
+            if (!visited.count(*it)) stack.push_back(*it);
+    }
+    return result;
+}
 ```
 
 ---
 
 ### 4.3 History (Stack)
 
-Digunakan untuk menyimpan riwayat path.
+Menyimpan setiap path yang berhasil ditemukan secara berurutan (LIFO display).
+
+#### Python
 
 ```python
 class History:
     def __init__(self):
-        self.stack = []
+        self._stack = []
 
     def push(self, path):
-        self.stack.append(path)
+        if path:
+            self._stack.append(path)
 
-    def show(self):
-        for i, p in enumerate(self.stack, 1):
-            print(f"{i}. {'-'.join(p)}")
+    def to_display_string(self):
+        return "\n".join(
+            f"{i}. {'-'.join(p)}"
+            for i, p in enumerate(self._stack, 1)
+        ) or "(history kosong)"
+```
+
+#### C++
+
+```cpp
+class History {
+public:
+    std::vector<std::vector<std::string>> stack;
+
+    void push(const std::vector<std::string>& path) {
+        if (!path.empty()) stack.push_back(path);
+    }
+
+    void display() const {
+        if (stack.empty()) { std::cout << "(history kosong)\n"; return; }
+        for (size_t i = 0; i < stack.size(); ++i) {
+            std::cout << (i + 1) << ". ";
+            for (size_t j = 0; j < stack[i].size(); ++j) {
+                if (j) std::cout << '-';
+                std::cout << stack[i][j];
+            }
+            std::cout << '\n';
+        }
+    }
+};
 ```
 
 ---
 
-## 5. 💻 Implementasi Graph
+## 5. Implementasi Graph
+
+### Python
 
 ```python
 class Graph:
     def __init__(self):
-        self.adj = {}
+        self.adj = {}   # dict[str, dict[str, dict[str, float]]]
 
     def add_node(self, node):
-        if node not in self.adj:
-            self.adj[node] = []
+        node = node.strip()
+        if node and node not in self.adj:
+            self.adj[node] = {}
 
-    def add_edge(self, u, v):
-        self.add_node(u)
-        self.add_node(v)
-        self.adj[u].append(v)
-        self.adj[v].append(u)
+    def add_edge(self, source, target, distance=1.0, time=1.0):
+        self.add_node(source)
+        self.add_node(target)
+        self.adj[source][target] = {"distance": distance, "time": time}
+        self.adj[target][source] = {"distance": distance, "time": time}
 
-    def show(self):
-        for node in self.adj:
-            print(node, "->", self.adj[node])
+    def has_node(self, node):
+        return node in self.adj
+
+    def neighbors(self, node):
+        return list(self.adj.get(node, {}).keys())
+
+    def get_edge_data(self, source, target):
+        return self.adj.get(source, {}).get(target, {"distance": 1.0, "time": 1.0})
+```
+
+### C++
+
+```cpp
+struct EdgeData { double distance = 1.0; double time_val = 1.0; };
+
+class Graph {
+public:
+    std::map<std::string, std::map<std::string, EdgeData>> adj;
+
+    void add_node(const std::string& raw) {
+        std::string node = trim(raw);
+        if (!node.empty() && !adj.count(node)) adj[node] = {};
+    }
+
+    void add_edge(const std::string& src, const std::string& tgt,
+                  double distance = 1.0, double time_val = 1.0) {
+        add_node(src); add_node(tgt);
+        adj[src][tgt] = {distance, time_val};
+        adj[tgt][src] = {distance, time_val};   // bidirectional
+    }
+
+    bool has_node(const std::string& node) const { return adj.count(node) > 0; }
+    EdgeData get_edge_data(const std::string& src, const std::string& tgt) const { ... }
+};
 ```
 
 ---
 
-## 6. 📊 Format Data (Excel & CSV)
+## 6. Format Data CSV
 
----
+### nodes.csv
 
-### 6.1 Nodes
-
-| id | name |
-| -- | ---- |
-| 0  | A    |
-| 1  | B    |
-| 2  | C    |
-| 3  | D    |
-| 4  | E    |
+| name |
+|------|
+| Jakarta Kota |
+| Bogor |
 
 ```csv
-id,name
-0,A
-1,B
-2,C
-3,D
-4,E
+name
+Jakarta Kota
+Bogor
 ```
 
----
+### edges.csv
 
-### 6.2 Edges
-
-| from | to |
-| ---- | -- |
-| A    | B  |
-| A    | D  |
-| B    | C  |
-| B    | E  |
-| D    | E  |
+| from | to | distance | time |
+|------|----|----------|------|
+| Jakarta Kota | Jayakarta | 1.5 | 3 |
+| Jayakarta | Mangga Besar | 1.0 | 2 |
 
 ```csv
-from,to
-A,B
-A,D
-B,C
-B,E
-D,E
+from,to,distance,time
+Jakarta Kota,Jayakarta,1.5,3
+Jayakarta,Mangga Besar,1.0,2
 ```
 
----
+Edge bersifat **bidirectional** — satu baris di CSV menciptakan dua arah.
+Jika kolom `distance`/`time` tidak ada, default 1.0.
 
-### 6.3 Query
+### query.csv
 
 | start | end |
-| ----- | --- |
-| A     | E   |
-| C     | D   |
+|-------|-----|
+| Jakarta Kota | Bogor |
 
 ```csv
 start,end
-A,E
-C,D
+Jakarta Kota,Bogor
 ```
 
----
+### result.csv (output)
 
-### 6.4 Result
+| start | end | path | distance | time |
+|-------|-----|------|----------|------|
+| Jakarta Kota | Bogor | Jakarta Kota-Jayakarta-...-Bogor | 50.5 | 86.0 |
 
-| start | end | path    | distance |
-| ----- | --- | ------- | -------- |
-| A     | E   | A-B-E   | 2        |
-| C     | D   | C-B-A-D | 3        |
+### history.csv (output)
 
----
-
-### 6.5 History
-
-| no | path    |
-| -- | ------- |
-| 1  | A-B-E   |
-| 2  | C-B-A-D |
+| no | path |
+|----|------|
+| 1 | Jakarta Kota-Jayakarta-...-Bogor |
 
 ---
 
-## 7. 📂 Load Data dari CSV
+## 7. Load & Save CSV
+
+### Load Graph (Python)
 
 ```python
-import csv
+class CsvRepository:
+    def load_graph(self, nodes_file, edges_file):
+        graph = Graph()
+        with open(nodes_file, encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                graph.add_node(row.get("name", ""))
 
-def load_graph(nodes_file, edges_file):
-    g = Graph()
-
-    with open(nodes_file) as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            g.add_node(row['name'])
-
-    with open(edges_file) as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            g.add_edge(row['from'], row['to'])
-
-    return g
+        with open(edges_file, encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                dist = float(row.get("distance", 1.0))
+                time = float(row.get("time", 1.0))
+                graph.add_edge(row["from"], row["to"], dist, time)
+        return graph
 ```
 
----
-
-## 8. 📤 Export Result ke CSV
+### Save Result (Python)
 
 ```python
-def save_result(filename, data):
-    import csv
-
-    with open(filename, 'w', newline='') as f:
+def save_result(self, filename, data):
+    with open(filename, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(['start', 'end', 'path', 'distance'])
-
-        for row in data:
-            writer.writerow([
-                row['start'],
-                row['end'],
-                '-'.join(row['path']),
-                len(row['path']) - 1
-            ])
+        writer.writerow(["start", "end", "path", "distance", "time"])
+        for r in data:
+            writer.writerow([r.start, r.end, "-".join(r.path),
+                             r.total_distance, r.total_time])
 ```
 
 ---
 
-## 9. ▶️ Contoh Output Program
+## 8. Contoh Output Program
 
 ```
-Shortest Path A → E:
-A → B → E
+=== Smart Navigation System ===
+Start node: Jakarta Kota
+End node: Bogor
+Optimize by (1) Distance or (2) Time [default: 1]: 1
 
-DFS Exploration:
-A → D → E → B → C
+Optimal path (distance):
+Jakarta Kota --(1.5)--> Jayakarta --(1.0)--> Mangga Besar --(1.2)-->
+... --(4.2)--> Bogor
+Total Distance: 50.5
+Total Time: 86.0
+```
 
+```
+DFS exploration:
+Jakarta Kota -> Jayakarta -> Mangga Besar -> Sawah Besar -> ...
+```
+
+```
 History:
-1. A-B-E
-2. C-B-A-D
+1. Jakarta Kota-Jayakarta-...-Bogor
 ```
 
 ---
 
-## 10. 📦 Struktur Project
+## 9. Struktur Project
 
 ```
-project/
-│
+Smart-Navigation-System-Documentation/
 ├── main.py
-├── graph.py
-├── algorithms.py
-├── history.py
-│
+├── streamlit_app.py
+├── cli_app.cpp              # C++ CLI source
+├── requirements.txt
 ├── data/
+│   ├── krl/
+│   │   ├── nodes.csv
+│   │   └── edges.csv
 │   ├── nodes.csv
 │   ├── edges.csv
 │   └── query.csv
-│
-└── output/
-    ├── result.csv
-    └── history.csv
+├── output/
+│   ├── result.csv
+│   └── history.csv
+├── smart_navigation/
+│   ├── cli/app.py           # SmartNavigationCLI
+│   ├── core/graph.py        # Graph class
+│   ├── core/history.py      # History class
+│   ├── services/navigation_service.py   # Dijkstra + DFS
+│   ├── io/csv_repository.py # Load/save CSV
+│   └── models/query_result.py
+└── tests/
 ```
 
 ---
 
-## 11. 🚀 Improvement (Advanced)
+## 10. Compile & Jalankan C++ CLI
 
-### 🔥 Pengembangan lanjut:
+### Prasyarat (Windows)
 
-* ✅ Weighted Graph → Dijkstra (`heapq`)
-* ✅ API → FastAPI (cocok dengan stack kamu)
-* ✅ Visualisasi → networkx + matplotlib
-* ✅ Streaming data → SSE
-* ✅ Integrasi crawling graph (social media network)
+Visual Studio Build Tools 2022 dengan komponen "Desktop development with C++".
 
----
+### Inisialisasi environment (sekali per sesi terminal)
 
-## 12. 🧠 Insight Penting
+```powershell
+.\init.ps1
+```
 
-Kenapa BFS untuk shortest path?
+### Compile
 
-> Karena BFS mengeksplorasi graph per level, sehingga jalur pertama yang ditemukan adalah jalur dengan jumlah edge paling sedikit.
+```powershell
+cl /std:c++17 /EHsc /O2 /Fe:cli_app.exe cli_app.cpp
+```
 
----
+### Jalankan
 
-## 13. 📌 Perbandingan C vs Python
+```powershell
+.\cli_app.exe
+```
 
-| Aspek           | C            | Python          |
-| --------------- | ------------ | --------------- |
-| Struktur data   | Array manual | dict + list     |
-| Queue           | Manual       | deque           |
-| Stack           | Manual       | list            |
-| Complexity code | Tinggi       | Lebih sederhana |
-| Scalability     | Rendah       | Tinggi          |
+Program mendeteksi otomatis folder `data/` — bisa dijalankan dari `CODE\`
+maupun dari dalam direktori repo.
 
 ---
 
-## 14. 📌 Kesimpulan
+## 11. Perbandingan Python vs C++
+
+| Aspek | Python | C++ |
+|-------|--------|-----|
+| Struktur data graph | `dict` nested | `std::map` nested |
+| Priority queue | `heapq` (min-heap) | `std::priority_queue` + `std::greater` |
+| Stack DFS | `list` | `std::vector` |
+| String handling | Native, dinamis | `std::string`, manual trim |
+| CSV I/O | `csv.DictReader/Writer` | `std::ifstream` + manual split |
+| Weighted edge | `dict` per edge | `struct EdgeData` |
+| Path reconstruction | `dict` parent + backtrack | `unordered_map<string, ParentInfo>` |
+| Eksekusi | Interpreter, lambat | Compiled, cepat |
+| Kompleksitas kode | Lebih sederhana | Lebih verbose |
+| Portabilitas build | `pip install` | Butuh compiler + env setup |
+
+---
+
+## 12. Kesimpulan
 
 Sistem ini menggabungkan:
 
-* Graph → representasi relasi
-* BFS → pencarian jalur tercepat
-* DFS → eksplorasi
-* Stack → penyimpanan history
+- **Graph berbobot** → representasi relasi antar lokasi dengan jarak dan waktu
+- **Dijkstra** → pencarian jalur optimal berdasarkan total bobot minimum
+- **DFS** → eksplorasi menyeluruh dari titik awal
+- **Stack / History** → penyimpanan riwayat pencarian
+- **CSV I/O** → persistensi data yang portabel
+- **Tiga antarmuka** → Python CLI, Streamlit UI, dan C++ CLI dengan logika yang identik
