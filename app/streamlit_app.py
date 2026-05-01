@@ -11,6 +11,8 @@ from pathlib import Path
 import networkx as nx
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as st_components
+from pyvis.network import Network
 from streamlit_agraph import Config, Edge, Node, agraph
 
 
@@ -49,7 +51,6 @@ def _init_state() -> None:
         st.session_state.last_dfs_path = []
     if "auto_loaded_graph" not in st.session_state:
         st.session_state.auto_loaded_graph = False
-    # Animation state
     if "animation_steps" not in st.session_state:
         st.session_state.animation_steps = []
     if "animation_type" not in st.session_state:
@@ -60,6 +61,12 @@ def _init_state() -> None:
         st.session_state.animation_end = ""
     if "animation_pos" not in st.session_state:
         st.session_state.animation_pos = {}
+    if "anim_playing" not in st.session_state:
+        st.session_state.anim_playing = False
+    if "anim_speed" not in st.session_state:
+        st.session_state.anim_speed = 0.5
+    if "anim_current_step" not in st.session_state:
+        st.session_state.anim_current_step = 0
 
 
 def _inject_css() -> None:
@@ -190,7 +197,7 @@ def _load_graph_from_csv(
     try:
         nodes_df = pd.read_csv(nodes_path)
         edges_df = pd.read_csv(edges_path)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if show_error:
             st.error(f"Gagal membaca CSV: {exc}")
         return False
@@ -239,10 +246,6 @@ def _save_history_to_csv(history_path: Path) -> None:
     pd.DataFrame(rows).to_csv(history_path, index=False)
 
 
-# ---------------------------------------------------------------------------
-# Algorithm step computation (for animation)
-# ---------------------------------------------------------------------------
-
 def _compute_dijkstra_steps(
     graph: nx.DiGraph, start: str, end: str, criteria: str
 ) -> tuple[list[dict], list[str], float, float]:
@@ -262,7 +265,6 @@ def _compute_dijkstra_steps(
             continue
         visited.add(node)
 
-        # Reconstruct path to current node
         path_to_node: list[str] = []
         cur: str | None = node
         while cur is not None:
@@ -300,7 +302,6 @@ def _compute_dijkstra_steps(
                 parent[neighbor] = node
                 heapq.heappush(pq, (new_w, neighbor))
 
-    # Reconstruct final path
     if end in parent:
         path: list[str] = []
         cur2: str | None = end
@@ -370,10 +371,6 @@ def _compute_dfs_steps(
     return steps, result_path
 
 
-# ---------------------------------------------------------------------------
-# Algorithm runners
-# ---------------------------------------------------------------------------
-
 def _run_bfs(start: str, end: str, criteria: str = "distance") -> None:
     graph = st.session_state.graph
     if not graph.has_node(start) or not graph.has_node(end):
@@ -404,7 +401,6 @@ def _run_bfs(start: str, end: str, criteria: str = "distance") -> None:
         (path[i], path[i + 1]) for i in range(len(path) - 1)
     }
 
-    # Store animation data
     st.session_state.animation_steps = steps
     st.session_state.animation_type = f"BFS / Dijkstra (optimasi: {criteria})"
     st.session_state.animation_start = start
@@ -413,6 +409,8 @@ def _run_bfs(start: str, end: str, criteria: str = "distance") -> None:
     st.session_state.animation_pos = {
         n: (float(xy[0]), float(xy[1])) for n, xy in pos.items()
     }
+    st.session_state.anim_current_step = 0
+    st.session_state.anim_playing = False
 
     st.success(
         f"Optimal path ({criteria}): {' → '.join(path)} "
@@ -463,7 +461,6 @@ def _run_dfs(start: str, end: str | None = None, criteria: str = "distance") -> 
         (path[i], path[i + 1]) for i in range(len(path) - 1)
     }
 
-    # Store animation data
     st.session_state.animation_steps = steps
     st.session_state.animation_type = (
         f"DFS Pathfinding ({criteria})" if end else "DFS Exploration"
@@ -474,6 +471,8 @@ def _run_dfs(start: str, end: str | None = None, criteria: str = "distance") -> 
     st.session_state.animation_pos = {
         n: (float(xy[0]), float(xy[1])) for n, xy in pos.items()
     }
+    st.session_state.anim_current_step = 0
+    st.session_state.anim_playing = False
 
     if end:
         st.success(
@@ -491,7 +490,7 @@ def _run_batch_query(query_path: Path, result_path: Path) -> None:
 
     try:
         query_df = pd.read_csv(query_path)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         st.error(f"Gagal membaca query.csv: {exc}")
         return
 
@@ -534,10 +533,6 @@ def _run_batch_query(query_path: Path, result_path: Path) -> None:
     _save_result_to_csv(result_path)
     st.success(f"Batch query selesai: {ok_count} result disimpan, {skip_count} query di-skip.")
 
-
-# ---------------------------------------------------------------------------
-# Graph visualization builders
-# ---------------------------------------------------------------------------
 
 def _degree_category(total_degree: int) -> tuple[str, str]:
     if total_degree >= 4:
@@ -653,22 +648,32 @@ def _build_agraph(
     return clicked_node
 
 
-def _build_agraph_for_animation(
+def _build_animation_html(
     graph: nx.DiGraph,
     step: dict,
     start: str,
     end: str,
     pos: dict[str, tuple[float, float]] | None = None,
     height: int = 320,
-    step_idx: str | int = 0,
-) -> None:
-    """Build an agraph frame for a single animation step."""
+) -> str:
+    """Render one animation frame as a self-contained HTML string via pyvis.
+
+    Using pyvis → HTML avoids React remount on every st.rerun(), which caused
+    the jittery/flickering behaviour when using streamlit-agraph.
+    """
     visited = step.get("visited", set())
     current = step.get("current", "")
     frontier = step.get("frontier", set())
     path_edges = step.get("path_edges", set())
 
-    nodes = []
+    net = Network(
+        height=f"{height}px",
+        width="100%",
+        directed=True,
+        bgcolor="#fffbeb",
+    )
+    net.toggle_physics(False)
+
     for node in graph.nodes():
         if node == current:
             color, size = "#f59e0b", 24
@@ -683,23 +688,20 @@ def _build_agraph_for_animation(
         else:
             color, size = "#cbd5e1", 15
 
-        node_kwargs = {
-            "id": node,
-            "label": node,
-            "size": size,
-            "color": color,
-            "shape": "dot",
-            "title": f"{node}",
-            "font": {"color": "#0f172a", "size": 11},
-        }
-        if pos and node in pos:
-            node_kwargs["x"] = pos[node][0] * 300
-            node_kwargs["y"] = pos[node][1] * 300
-            node_kwargs["fixed"] = True
+        x = pos[node][0] * 500 if pos and node in pos else 0.0
+        y = pos[node][1] * 500 if pos and node in pos else 0.0
+        net.add_node(
+            node,
+            label=node,
+            color=color,
+            size=size,
+            x=x,
+            y=y,
+            physics=False,
+            font={"color": "#0f172a", "size": 11},
+            title=node,
+        )
 
-        nodes.append(Node(**node_kwargs))
-
-    edges = []
     for src, tgt in graph.edges():
         if (src, tgt) in path_edges:
             color, width = "#f97316", 4
@@ -707,33 +709,11 @@ def _build_agraph_for_animation(
             color, width = "#86efac", 2
         else:
             color, width = "#e2e8f0", 1
+        net.add_edge(src, tgt, color=color, width=width, smooth=False)
 
-        edges.append(
-            Edge(
-                source=src,
-                target=tgt,
-                color=color,
-                width=width,
-                smooth=False,
-            )
-        )
-
-    config = Config(
-        width="100%",
-        height=height,
-        directed=True,
-        physics=False,
-        hierarchical=False,
-        staticGraph=True,
-        step_id=step_idx,
-    )
-
-    agraph(nodes=nodes, edges=edges, config=config)
+    return net.generate_html(notebook=False)
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main() -> None:
     _init_state()
@@ -821,7 +801,6 @@ def main() -> None:
         with st.expander("Algorithms", expanded=True):
             st.markdown('<div class="panel-box">', unsafe_allow_html=True)
 
-            # --- BFS / Dijkstra ---
             st.markdown("**Find Optimal Path (BFS / Dijkstra)**")
             bfs_col1, bfs_col2 = st.columns(2)
             bfs_start = bfs_col1.selectbox("Start Node", node_options, key="bfs_start")
@@ -836,7 +815,6 @@ def main() -> None:
 
             st.divider()
 
-            # --- DFS ---
             st.markdown("**DFS (Depth-First Search)**")
             dfs_col1, dfs_col2 = st.columns(2)
             dfs_start = dfs_col1.selectbox("DFS Start", node_options, key="dfs_start")
@@ -884,9 +862,6 @@ def main() -> None:
                 st.caption("Belum ada hasil BFS/DFS di sesi ini.")
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # -----------------------------------------------------------------------
-    # RIGHT COLUMN
-    # -----------------------------------------------------------------------
     with right_col:
         graph = st.session_state.graph
         selected_node_value = st.session_state.selected_node
@@ -928,9 +903,6 @@ def main() -> None:
             st.session_state.selected_node = clicked_node
             selected_node_value = clicked_node
 
-        # -------------------------------------------------------------------
-        # ANIMATION SECTION
-        # -------------------------------------------------------------------
         if st.session_state.animation_steps:
             st.markdown("---")
             st.markdown(
@@ -942,8 +914,11 @@ def main() -> None:
             anim_start = st.session_state.animation_start
             anim_end = st.session_state.animation_end
             anim_pos = st.session_state.animation_pos
+            total_steps = len(anim_steps)
 
-            # Legend
+            if st.session_state.anim_current_step >= total_steps:
+                st.session_state.anim_current_step = 0
+
             legend_html = """
             <div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px 0;">
               <span style="background:#f59e0b;padding:3px 10px;border-radius:20px;font-size:0.78rem;font-weight:600;">Current</span>
@@ -956,55 +931,68 @@ def main() -> None:
             """
             st.markdown(legend_html, unsafe_allow_html=True)
 
-            sp_col, btn_col = st.columns([3, 1])
-            anim_speed = sp_col.slider(
-                "Kecepatan animasi (detik/step)",
+            ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1, 1, 3])
+            play_pressed = ctrl_col1.button(
+                "▶ Play" if not st.session_state.anim_playing else "⏸ Pause",
+                type="primary",
+                key="play_anim_btn",
+            )
+            reset_pressed = ctrl_col2.button("⏮ Reset", key="reset_anim_btn")
+            anim_speed = ctrl_col3.slider(
+                "Kecepatan (detik/step)",
                 min_value=0.1,
                 max_value=2.0,
-                value=0.5,
+                value=st.session_state.anim_speed,
                 step=0.1,
-                key="anim_speed",
+                key="anim_speed_val",
             )
-            play_anim = btn_col.button("▶ Play", type="primary", key="play_anim_btn")
+            st.session_state.anim_speed = anim_speed
 
-            step_info_placeholder = st.empty()
-            anim_placeholder = st.empty()
+            if play_pressed:
+                if st.session_state.anim_playing:
+                    st.session_state.anim_playing = False
+                else:
+                    if st.session_state.anim_current_step >= total_steps - 1:
+                        st.session_state.anim_current_step = 0
+                    st.session_state.anim_playing = True
 
-            # Show initial (last) state by default
-            if anim_steps:
-                last_step = anim_steps[-1]
-                with step_info_placeholder.container():
-                    total = len(anim_steps)
-                    st.caption(f"Step {total}/{total}: {last_step['message']}")
-                with anim_placeholder.container():
-                    st.markdown('<div class="anim-shell">', unsafe_allow_html=True)
-                    _build_agraph_for_animation(
-                    anim_graph, last_step, anim_start, anim_end, pos=anim_pos, height=320, step_idx="initial"
-                    )
-                    st.markdown("</div>", unsafe_allow_html=True)
+            if reset_pressed:
+                st.session_state.anim_current_step = 0
+                st.session_state.anim_playing = False
 
-            if play_anim:
-                for i, step in enumerate(anim_steps):
-                    with step_info_placeholder.container():
-                        progress = (i + 1) / len(anim_steps)
-                        st.progress(progress, text=f"Step {i + 1}/{len(anim_steps)}: {step['message']}")
-                    with anim_placeholder.container():
-                        st.markdown('<div class="anim-shell">', unsafe_allow_html=True)
-                        _build_agraph_for_animation(
-                        anim_graph, step, anim_start, anim_end, pos=anim_pos, height=320, step_idx=i
-                        )
-                        st.markdown("</div>", unsafe_allow_html=True)
-                    time.sleep(anim_speed)
+            slider_val = st.slider(
+                "Step",
+                min_value=0,
+                max_value=total_steps - 1,
+                value=st.session_state.anim_current_step,
+            )
+            if slider_val != st.session_state.anim_current_step:
+                st.session_state.anim_current_step = slider_val
+                st.session_state.anim_playing = False
 
-                # After animation ends, show final step
-                with step_info_placeholder.container():
-                    st.success(
-                        f"Animasi selesai! Total {len(anim_steps)} langkah."
-                    )
+            current_step = st.session_state.anim_current_step
+            step = anim_steps[current_step]
 
-        # -------------------------------------------------------------------
-        # NODE DETAIL
-        # -------------------------------------------------------------------
+            st.progress(
+                (current_step + 1) / total_steps,
+                text=f"Step {current_step + 1}/{total_steps}: {step['message']}",
+            )
+
+            anim_html = _build_animation_html(
+                anim_graph, step, anim_start, anim_end,
+                pos=anim_pos, height=320,
+            )
+            st_components.html(anim_html, height=340, scrolling=False)
+
+            if st.session_state.anim_playing:
+                if current_step < total_steps - 1:
+                    time.sleep(st.session_state.anim_speed)
+                    st.session_state.anim_current_step += 1
+                    st.rerun()
+                else:
+                    st.session_state.anim_playing = False
+                    st.success(f"Animasi selesai! Total {total_steps} langkah.")
+
         st.markdown("### Node Detail")
         effective_selected = st.session_state.selected_node or selected_node_value
         if effective_selected and graph.has_node(effective_selected):

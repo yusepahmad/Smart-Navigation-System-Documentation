@@ -18,14 +18,10 @@ class NavigationService:
         if not graph.has_node(start) or not graph.has_node(end):
             return [], 0.0, 0.0
 
-        # Priority queue stores tuples of (current_weight, current_node)
         pq = [(0.0, start)]
         
-        # Track the minimum weight to reach a node
         min_weights = {start: 0.0}
         
-        # Track parent node and the edge data used to reach it
-        # value is (parent_node, distance_from_parent, time_from_parent)
         parent: dict[str, tuple[str, float, float] | None] = {start: None}
 
         while pq:
@@ -34,7 +30,6 @@ class NavigationService:
             if current == end:
                 break
                 
-            # Skip if we found a better path earlier
             if current_weight > min_weights.get(current, float('inf')):
                 continue
 

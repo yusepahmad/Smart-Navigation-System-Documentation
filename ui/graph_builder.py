@@ -60,7 +60,7 @@ def _safe_read_csv(path: str | Path, label: str, warnings: list[str]) -> pd.Data
 
     try:
         return pd.read_csv(file_path)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         warnings.append(f"Gagal membaca {label}: {exc}")
         return pd.DataFrame()
 

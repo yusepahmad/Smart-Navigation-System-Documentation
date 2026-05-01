@@ -69,7 +69,7 @@ def render_metrics(graph_data: GraphData) -> None:
         import networkx as nx
 
         connected_components = nx.number_connected_components(graph) if total_nodes else 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         connected_components = 0
 
     col1, col2, col3, col4 = st.columns(4)
