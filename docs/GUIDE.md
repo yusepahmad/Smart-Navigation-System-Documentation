@@ -2,16 +2,26 @@
 
 ## 1. Setup Python
 
+Pastikan `uv` sudah terinstall:
+
 ```bash
-pip install -r requirements.txt
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Jika memakai virtualenv:
+Install dependensi:
 
 ```bash
+./run.sh setup
+# atau langsung: uv sync
+```
+
+Jika ingin menggunakan virtualenv manual:
+
+```bash
+uv venv
 source .venv/bin/activate        # Linux/Mac
 .venv\Scripts\activate           # Windows
-pip install -r requirements.txt
+uv sync
 ```
 
 ---
@@ -19,7 +29,8 @@ pip install -r requirements.txt
 ## 2. Menjalankan Python CLI
 
 ```bash
-python main.py
+./run.sh cli
+# atau: uv run python app/main.py
 ```
 
 ---
@@ -27,7 +38,8 @@ python main.py
 ## 3. Menjalankan Streamlit UI
 
 ```bash
-streamlit run streamlit_app.py
+./run.sh ui
+# atau: uv run streamlit run app/streamlit_app.py
 ```
 
 Streamlit membuka browser otomatis. Semua fitur CLI tersedia di panel kiri,
@@ -35,30 +47,82 @@ visualisasi graph interaktif di panel kanan.
 
 ---
 
-## 4. Setup & Menjalankan C++ CLI
+## 4. Setup & Menjalankan C CLI
 
-### 4.1 Inisialisasi environment MSVC
+### 4.A Linux / Mac (gcc)
+
+#### 4.A.1 Pastikan gcc tersedia
+
+```bash
+gcc --version
+```
+
+Jika belum terinstall:
+
+```bash
+# Ubuntu / Debian / WSL
+sudo apt install gcc
+
+# Arch / Manjaro
+sudo pacman -S gcc
+
+# Mac (Homebrew)
+brew install gcc
+```
+
+#### 4.A.2 Compile via run.sh
+
+```bash
+./run.sh c-build
+```
+
+Atau langsung via Makefile:
+
+```bash
+make -C c/
+```
+
+#### 4.A.3 Jalankan
+
+```bash
+./run.sh c-run
+# atau: ./c/cli_app
+```
+
+---
+
+### 4.B Windows (MSVC / PowerShell)
+
+#### 4.B.1 Inisialisasi environment MSVC
 
 Jalankan sekali per sesi terminal PowerShell:
 
 ```powershell
-.\init.ps1
+.\c\init.ps1
 ```
 
 Script ini mengimpor variabel environment dari `vcvarsall.bat x64` ke sesi
 PowerShell yang sedang berjalan, sehingga `cl` dan `link` tersedia langsung.
 
-### 4.2 Compile
+#### 4.B.2 Compile C++ (cl)
 
 ```powershell
-cl /std:c++17 /EHsc /O2 /Fe:cli_app.exe cli_app.cpp
+cl /std:c++17 /EHsc /O2 /Fe:c\cli_app.exe c\cli_app.cpp
 ```
 
-### 4.3 Jalankan
+Atau compile versi C:
 
 ```powershell
-.\cli_app.exe
+cl /O2 /Fe:c\cli_app_c.exe c\cli_app.c
 ```
+
+#### 4.B.3 Jalankan
+
+```powershell
+.\c\cli_app.exe
+```
+
+---
 
 Program mendeteksi otomatis apakah folder `data/` ada di direktori saat ini
 atau di subdirektori `Smart-Navigation-System-Documentation/`, sehingga bisa
@@ -66,7 +130,7 @@ dijalankan dari `CODE\` maupun dari dalam folder repo.
 
 ---
 
-## 5. Menu CLI (Python & C++ identik)
+## 5. Menu CLI (Python & C identik)
 
 | Pilihan | Fitur | Keterangan |
 |---------|-------|------------|
@@ -165,16 +229,19 @@ no,path
 
 | Masalah | Solusi |
 |---------|--------|
-| `krl/nodes.csv belum ada di folder data/` | Jalankan program dari direktori yang mengandung folder `data/`, atau gunakan menu 7 dan ketik path relatif yang benar |
-| `cl: command not found` | Jalankan `.\init.ps1` terlebih dahulu untuk inisialisasi MSVC |
+| `krl/nodes.csv belum ada di folder data/` | Jalankan program dari direktori root project (yang mengandung folder `data/`) |
+| `uv: command not found` | Install uv: `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| `gcc: command not found` | Install gcc — lihat langkah 4.A.1 sesuai distro |
+| `cl: command not found` | Windows: jalankan `.\c\init.ps1` untuk inisialisasi MSVC |
 | Node/path tidak ditemukan di menu 4 | Pastikan graph sudah dimuat (menu 7) atau node sudah ditambahkan (menu 1) |
 | Batch query hasil kosong | Cek `data/query.csv` — node start/end harus ada di graph yang sudah dimuat |
-| `fatal error C1034: algorithm: no include path set` | Jalankan `.\init.ps1` sebelum compile |
+| `fatal error C1034: algorithm: no include path set` | Jalankan `.\c\init.ps1` sebelum compile |
 
 ---
 
 ## 10. Testing
 
 ```bash
-python -m unittest discover -s tests -v
+./run.sh test
+# atau: uv run python -m unittest discover -s tests -v
 ```

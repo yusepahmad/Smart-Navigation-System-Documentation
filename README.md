@@ -2,11 +2,30 @@
 
 Sistem navigasi berbasis **weighted graph** dengan tiga antarmuka:
 
-| Antarmuka | Cara Jalankan |
+| Antarmuka | Command |
 |---|---|
-| Python CLI (OOP) | `python main.py` |
-| Streamlit UI interaktif | `streamlit run streamlit_app.py` |
-| C++ CLI | `.\cli_app.exe` (lihat bagian Setup C++) |
+| Python CLI (OOP) | `./run.sh cli` |
+| Streamlit UI interaktif | `./run.sh ui` |
+| C CLI (Linux/Mac) | `./run.sh c-build` lalu `./run.sh c-run` |
+| C CLI (Windows) | Lihat `docs/GUIDE.md` bagian 4.B |
+
+---
+
+## Quickstart
+
+```bash
+# 1. Clone repo
+git clone <repo-url>
+cd project-akhir
+
+# 2. Install dependencies
+./run.sh setup
+
+# 3. Jalankan
+./run.sh cli        # Python CLI
+./run.sh ui         # Streamlit UI
+./run.sh test       # Test suite
+```
 
 ---
 
@@ -36,72 +55,77 @@ Sistem navigasi berbasis **weighted graph** dengan tiga antarmuka:
 ## Struktur Project
 
 ```text
-Smart-Navigation-System-Documentation/
-├── main.py                  # Entry point Python CLI
-├── streamlit_app.py         # Streamlit UI
-├── cli_app.cpp              # C++ CLI (source, copy dari CODE/)
-├── requirements.txt
+project-akhir/
+├── run.sh                   # Unified runner — semua command dari sini
+├── pyproject.toml           # Dependensi Python (uv)
+├── README.md
+│
+├── app/
+│   ├── main.py              # Entry point Python CLI
+│   └── streamlit_app.py     # Streamlit UI
+│
+├── docs/
+│   ├── GUIDE.md             # Panduan lengkap setup & penggunaan
+│   └── documentation.md    # Dokumentasi teknis algoritma
+│
+├── c/
+│   ├── cli_app.c            # C CLI source
+│   ├── cli_app.cpp          # C++ CLI source
+│   ├── Makefile             # Build targets (Linux/Mac)
+│   └── init.ps1             # Windows MSVC environment init
+│
 ├── data/
 │   ├── krl/
 │   │   ├── nodes.csv        # Dataset stasiun KRL
-│   │   └── edges.csv        # Koneksi antar stasiun (with distance & time)
+│   │   └── edges.csv        # Koneksi antar stasiun
 │   ├── nodes.csv
 │   ├── edges.csv
 │   └── query.csv
-├── output/
-│   ├── result.csv
-│   └── history.csv
-├── smart_navigation/
+│
+├── output/                  # Generated (result.csv, history.csv)
+│
+├── smart_navigation/        # Python package (core logic)
 │   ├── cli/app.py
 │   ├── core/graph.py
 │   ├── core/history.py
 │   ├── services/navigation_service.py
 │   ├── io/csv_repository.py
 │   └── models/query_result.py
+│
 └── tests/
 ```
 
 ---
 
-## Setup Python
+## Setup
+
+### Python (via uv)
 
 ```bash
-pip install -r requirements.txt
+./run.sh setup
 ```
 
-## Menjalankan Python CLI
+Jika belum punya `uv`:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### C / C++ (Linux/Mac)
 
 ```bash
-python main.py
+./run.sh c-build      # compile C
+./run.sh c-run        # jalankan
 ```
 
-## Menjalankan Streamlit UI
-
+Atau langsung via `make`:
 ```bash
-streamlit run streamlit_app.py
+make -C c/
+./c/cli_app
 ```
 
-## Setup & Menjalankan C++ CLI
+### C / C++ (Windows)
 
-### 1. Inisialisasi environment MSVC (sekali per sesi terminal)
-
-```powershell
-.\init.ps1
-```
-
-### 2. Compile
-
-```powershell
-cl /std:c++17 /EHsc /O2 /Fe:cli_app.exe cli_app.cpp
-```
-
-### 3. Jalankan
-
-```powershell
-.\cli_app.exe
-```
-
-> Program otomatis mendeteksi folder `data/` dari direktori kerja saat ini.
+Lihat [docs/GUIDE.md](docs/GUIDE.md) bagian 4.B.
 
 ---
 
@@ -120,9 +144,12 @@ cl /std:c++17 /EHsc /O2 /Fe:cli_app.exe cli_app.cpp
 ## Menjalankan Test
 
 ```bash
-python -m unittest discover -s tests -v
+./run.sh test
 ```
+
+---
 
 ## Dokumentasi Detail
 
-Lihat [GUIDE.md](GUIDE.md) dan [documention.md](documention.md).
+- [docs/GUIDE.md](docs/GUIDE.md) — panduan setup, menu CLI, format CSV, troubleshooting
+- [docs/documentation.md](docs/documentation.md) — dokumentasi teknis algoritma & arsitektur

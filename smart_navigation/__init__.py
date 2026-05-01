@@ -1,4 +1,7 @@
-"""Smart Navigation System package."""
+"""
+Smart Navigation System package — weighted graph navigation with Dijkstra & DFS.
+/ Paket Smart Navigation System — graph navigasi berbobot dengan Dijkstra & DFS.
+"""
 
 from .core.graph import Graph
 from .core.history import History

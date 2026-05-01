@@ -1,4 +1,6 @@
-"""Entry point and compatibility API for Smart Navigation System."""
+"""
+Entry point and compatibility API for Smart Navigation System.
+"""
 
 from pathlib import Path
 
@@ -39,7 +41,7 @@ def save_history(filename: str | Path, history_stack: list[list[str]]):
 
 
 def main() -> None:
-    app = SmartNavigationCLI(base_dir=Path(__file__).resolve().parent)
+    app = SmartNavigationCLI(base_dir=Path(__file__).resolve().parent.parent)
     app.run()
 
 

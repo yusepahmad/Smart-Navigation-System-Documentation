@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from main import load_graph, load_queries, save_history, save_result
+from app.main import load_graph, load_queries, save_history, save_result
 from smart_navigation.core import Graph
 from smart_navigation.models import QueryResult
 from smart_navigation.services import NavigationService

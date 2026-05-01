@@ -1,24 +1,51 @@
+# Python
 .venv/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Testing & coverage
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.tox/
 .cache/
 .coverage
 .coverage.*
 coverage.xml
 htmlcov/
+
+# Environment
 .env
 .env.*
-dist/
-build/
-*.egg-info/
-*.pyc
-*.pyo
-*.pyd
-*.log
+
+# Database
 *.sqlite3
 *.db
+
+# Logs
+*.log
+
+# C/C++ build artifacts
+c/cli_app
+c/cli_app_cpp
+*.exe
+*.obj
+*.o
+*.out
+
+# Output CSV (generated files)
+output/result.csv
+output/history.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
 .idea/
 .vscode/
-.tox/

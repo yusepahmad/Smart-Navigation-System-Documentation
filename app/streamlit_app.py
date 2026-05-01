@@ -1,4 +1,6 @@
-"""Unified Streamlit UI for Smart Navigation System (Directed Graph, split view)."""
+"""
+Unified Streamlit UI for Smart Navigation System (Directed Graph, split view).
+"""
 
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 st.set_page_config(
@@ -560,9 +562,6 @@ def _build_agraph(
     ]
     subgraph = graph.subgraph(visible_nodes).copy()
 
-    if subgraph.number_of_nodes() == 0:
-        st.info("Graph kosong setelah filter degree.")
-        return None
 
     highlight_edges: set[tuple[str, str]] = set()
     if highlight_mode == "path":
@@ -875,43 +874,6 @@ def main() -> None:
 
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with st.expander("Realtime Filters & Highlight", expanded=True):
-            st.markdown('<div class="panel-box">', unsafe_allow_html=True)
-            max_degree = 0
-            if st.session_state.graph.number_of_nodes() > 0:
-                max_degree = max(
-                    st.session_state.graph.in_degree(n) + st.session_state.graph.out_degree(n)
-                    for n in st.session_state.graph.nodes()
-                )
-
-            min_degree = st.slider("Minimum Degree", 0, max_degree if max_degree else 0, 0)
-
-            selected_node = st.selectbox(
-                "Selected Node",
-                options=["(none)"] + graph_nodes,
-                index=0 if st.session_state.selected_node is None else 0,
-                help="Klik node di graph atau pilih dari dropdown untuk detail.",
-            )
-            if selected_node == "(none)":
-                selected_node_value = st.session_state.selected_node
-            else:
-                selected_node_value = selected_node
-
-            highlight_mode = st.radio(
-                "Highlight Mode",
-                options=["neighbors", "path", "custom selection"],
-                key="ui_highlight_mode",
-                horizontal=True,
-            )
-
-            custom_nodes = st.multiselect(
-                "Custom Node Selection",
-                options=graph_nodes,
-                default=[],
-                help="Digunakan saat mode highlight = custom selection",
-            )
-            st.markdown("</div>", unsafe_allow_html=True)
-
         with st.expander("Quick Logs", expanded=False):
             st.markdown('<div class="panel-box">', unsafe_allow_html=True)
             if st.session_state.last_bfs_path:
@@ -927,6 +889,10 @@ def main() -> None:
     # -----------------------------------------------------------------------
     with right_col:
         graph = st.session_state.graph
+        selected_node_value = st.session_state.selected_node
+        min_degree = 0
+        highlight_mode = "none"
+        custom_nodes: list[str] = []
 
         total_nodes = graph.number_of_nodes()
         total_edges = graph.number_of_edges()
